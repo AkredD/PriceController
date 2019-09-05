@@ -108,7 +108,7 @@ public class ControllerTest {
             assertTrue("[contains expected value n1]", result.contains(n1));
             assertTrue("[contains too many values]", result.size() == 2);
         }catch (ParseException ex) {
-
+            fail("this statement cannot be reached");
         }
     }
 
