@@ -200,6 +200,7 @@ public class Controller implements ControllerLocal {
     public List<PriceModel> mergePrices(List<PriceModel> oldPrices, List<PriceModel> updatePrices) {
         final var availableCatalog = formCatalogFromList.apply(oldPrices);
         final var updateCatalog = formCatalogFromList.apply(updatePrices);
+        // --TODO add parallel 
         List<PriceModel> resultCatalog = updateCatalog.keySet()
                 .stream()
                 .map(updatingPriceByPK -> {
