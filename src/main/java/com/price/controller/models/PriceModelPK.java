@@ -12,19 +12,6 @@ public class PriceModelPK {
         this.priceId = priceModel.getProductCode();
     }
 
-    public Integer getPriceNumber() {
-        return priceNumber;
-    }
-
-    public Integer getPriceDepart() {
-        return priceDepart;
-    }
-
-    public Long getPriceId() {
-        return priceId;
-    }
-
-
     @Override
     public int hashCode() {
         return (priceNumber * 13 + priceDepart) * 13 + priceId.intValue();
@@ -42,6 +29,6 @@ public class PriceModelPK {
             return false;
         }
         PriceModelPK o = (PriceModelPK) obj;
-        return (priceId.equals(o.getPriceId()) && priceNumber.equals(o.getPriceNumber()) && priceDepart.equals(o.getPriceDepart()));
+        return (priceId.equals(o.priceId) && priceNumber.equals(o.priceNumber) && priceDepart.equals(o.priceDepart));
     }
 }

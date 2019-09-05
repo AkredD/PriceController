@@ -31,7 +31,6 @@ public class PriceModel implements Serializable {
         this.value = original.value;
     }
 
-
     public Long getId() {
         return id;
     }
@@ -86,11 +85,6 @@ public class PriceModel implements Serializable {
 
     public void setValue(Long value) {
         this.value = value;
-    }
-
-    @Override
-    public String toString() {
-        return "id: " + id + " productCode: " + productCode + " number: " + number + " depart: " + depart + " begin: " + begin.toString() + " end: " + end.toString() + " value: " + value;
     }
 
     @Override

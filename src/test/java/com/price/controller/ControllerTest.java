@@ -39,14 +39,21 @@ public class ControllerTest {
                     formatter.parse("2013-01-15T00:00:00"), formatter.parse("2013-01-25T23:59:59"), 92000L);
             PriceModel r4 = new PriceModel(1L, 122856L, 1, 1,
                     formatter.parse("2013-01-01T00:00:00"), formatter.parse("2013-02-20T23:59:59"), 11000L);
-            List<PriceModel> exprectedRes = Arrays.asList(r1, r2, r3, r4);
-            var resust = Controller.getInstance().mergePrices(catalog, update);
-            assertTrue("[contains expected value r1]", resust.contains(r1));
-            assertTrue("[contains expected value r2]", resust.contains(r2));
-            assertTrue("[contains expected value r3]", resust.contains(r3));
-            assertTrue("[contains expected value r4]", resust.contains(r4));
+            var result = Controller.getInstance().mergePrices(catalog, update);
+            assertTrue("[contains expected value r1]", result.contains(r1));
+            assertTrue("[contains expected value r2]", result.contains(r2));
+            assertTrue("[contains expected value r3]", result.contains(r3));
+            assertTrue("[contains expected value r4]", result.contains(r4));
+            assertTrue("[contains too many values]", result.size() == 4);
+        } catch (ParseException e) {
+            fail("this statement cannot be reached");
+        }
+    }
 
-
+    @Test
+    public void mergePricesSecond() {
+        DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+        try {
             PriceModel pp1 = new PriceModel(1L, 122856L, 1, 1,
                     formatter.parse("2013-01-01T00:00:00"), formatter.parse("2013-01-31T23:59:59"), 11000L);
             PriceModel pp2 = new PriceModel(2L, 122856L, 2, 1,
@@ -73,15 +80,37 @@ public class ControllerTest {
                     formatter.parse("2013-01-01T00:00:00"), formatter.parse("2013-01-12T00:00:00"), 5000L);
             PriceModel rr6 = new PriceModel(null, 6654L, 1, 2,
                     formatter.parse("2013-01-12T00:00:00"), formatter.parse("2013-01-13T00:00:00"), 4000L);
-            var resustL = Controller.getInstance().mergePrices(catalogL, updateL);
-            assertTrue("[contains expected value r1]", resustL.contains(rr1));
-            assertTrue("[contains expected value r2]", resustL.contains(rr2));
-            assertTrue("[contains expected value r3]", resustL.contains(rr3));
-            assertTrue("[contains expected value r4]", resustL.contains(rr4));
-            assertTrue("[contains expected value r5]", resustL.contains(rr5));
-            assertTrue("[contains expected value r6]", resustL.contains(rr6));
-        } catch (ParseException e) {
-            e.printStackTrace();
+            var result = Controller.getInstance().mergePrices(catalogL, updateL);
+            assertTrue("[contains expected value r1]", result.contains(rr1));
+            assertTrue("[contains expected value r2]", result.contains(rr2));
+            assertTrue("[contains expected value r3]", result.contains(rr3));
+            assertTrue("[contains expected value r4]", result.contains(rr4));
+            assertTrue("[contains expected value r5]", result.contains(rr5));
+            assertTrue("[contains expected value r6]", result.contains(rr6));
+            assertTrue("[contains too many values]", result.size() == 6);
+        }catch (ParseException ex) {
+            fail("this statement cannot be reached");
         }
     }
+
+    @Test
+    public void mergePricesThird() {
+        DateFormat formatter = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
+        try {
+            PriceModel p1 = new PriceModel(1L, 122856L, 2, 1,
+                    formatter.parse("2013-01-01T00:00:00"), formatter.parse("2013-01-31T23:59:59"), 11000L);
+            List<PriceModel> catalog = Arrays.asList(p1);
+            PriceModel n1 = new PriceModel(null, 122856L, 1, 1,
+                    formatter.parse("2013-01-20T00:00:00"), formatter.parse("2013-02-20T23:59:59"), 11000L);
+            List<PriceModel> update = Arrays.asList(n1);
+            var result = Controller.getInstance().mergePrices(catalog, update);
+            assertTrue("[contains expected value p1]", result.contains(p1));
+            assertTrue("[contains expected value n1]", result.contains(n1));
+            assertTrue("[contains too many values]", result.size() == 2);
+        }catch (ParseException ex) {
+
+        }
+    }
+
+
 }

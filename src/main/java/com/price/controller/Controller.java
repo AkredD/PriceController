@@ -12,8 +12,119 @@ import java.util.stream.Collectors;
 
 public class Controller implements ControllerLocal {
     private static volatile Controller instance;
+    private final Function<List<PriceModel>, Map<PriceModelPK, List<PriceModel>>> formCatalogFromList = (prices) -> {
+        return (prices == null) ? new HashMap<>() : prices.stream().collect(Collectors.groupingBy((PriceModelPK::new)));
+    };
+    //merging simple catalog
+    private final BinaryOperator<List<PriceModel>> merge = (previousCatalog, newCatalog) -> {
+        Collections.sort(previousCatalog, Comparator.comparing(PriceModel::getBegin));
+        Collections.sort(newCatalog, Comparator.comparing(PriceModel::getBegin));
+        List<PriceModel> priceModels = new ArrayList<>();
+        Integer previousCursor = 0;
+        Integer newCursor = 0;
+        while (newCursor < newCatalog.size() && previousCursor < previousCatalog.size()) {
+            PriceModel previousPrice = previousCatalog.get(previousCursor);
+            PriceModel newPrice = newCatalog.get(newCursor);
+            PriceModel pastPrice = (priceModels.isEmpty())
+                    ? new PriceModel(null, null, null, null, new Date(Long.MIN_VALUE), new Date(Long.MIN_VALUE), null)
+                    : priceModels.get(priceModels.size() - 1);
+            //bool variables for check previous and new prices positions relative to each other
+            Boolean previousBeginMoreOrEqPastEnd = previousPrice.getBegin().compareTo(pastPrice.getEnd()) >= 0;
+            Boolean previousEndLessNewBegin = previousPrice.getEnd().compareTo(newPrice.getBegin()) < 0;
+            Boolean previousEndLessOrEqNewBegin = previousPrice.getEnd().compareTo(newPrice.getBegin()) <= 0;
+            Boolean previousEndLessOrEqNewEnd = previousPrice.getEnd().compareTo(newPrice.getEnd()) <= 0;
+            Boolean previousEndLessNewEnd = previousPrice.getEnd().compareTo(newPrice.getEnd()) < 0;
+            Boolean previousBeginLessOrEqNewEnd = previousPrice.getBegin().compareTo(newPrice.getEnd()) <= 0;
+            Boolean previousBeginLessNewBegin = previousPrice.getBegin().compareTo(newPrice.getBegin()) < 0;
+            Boolean previousBeginLessNewEnd = previousPrice.getBegin().compareTo(newPrice.getEnd()) < 0;
+            if (previousPrice.getValue().equals(newPrice.getValue())) {
+                if (previousEndLessNewBegin) {
+                    if (!previousBeginMoreOrEqPastEnd) {
+                        previousPrice.setBegin(pastPrice.getEnd());
+                    }
+                    priceModels.add(previousPrice);
+                    previousCursor++;
+                    continue;
+                }
+                if (previousEndLessOrEqNewEnd) {
+                    previousPrice.setBegin(getMinDate(previousPrice.getBegin(), newPrice.getBegin()));
+                    previousPrice.setEnd(newPrice.getEnd());
+                    priceModels.add(previousPrice);
+                    previousCursor++;
+                    newCursor++;
+                    continue;
+                }
+                if (previousBeginLessOrEqNewEnd) {
+                    newPrice.setBegin(getMinDate(previousPrice.getBegin(), newPrice.getBegin()));
+                    previousPrice.setBegin(newPrice.getEnd());
+                }
+                priceModels.add(newPrice);
+                newCursor++;
+            } else {
+                if (previousEndLessOrEqNewBegin) {
+                    if (!previousBeginMoreOrEqPastEnd) {
+                        previousPrice.setBegin(pastPrice.getEnd());
+                    }
+                    priceModels.add(previousPrice);
+                    previousCursor++;
+                    continue;
+                }
+                if (previousEndLessNewEnd) {
+                    if (previousBeginLessNewBegin) {
+                        previousPrice.setEnd(newPrice.getBegin());
+                        priceModels.add(previousPrice);
+                    }
+                    priceModels.add(newPrice);
+                    previousCursor++;
+                    newCursor++;
+                    continue;
+                }
+                if (previousBeginLessNewBegin) {
+                    PriceModel price = new PriceModel(previousPrice);
+                    price.setEnd(newPrice.getBegin());
+                    previousPrice.setBegin(newPrice.getEnd());
+                    priceModels.add(price);
+                    priceModels.add(newPrice);
+                    newCursor++;
+                    continue;
+                }
+                if (previousBeginLessNewEnd) {
+                    previousPrice.setBegin(newPrice.getEnd());
+                }
+                priceModels.add(newPrice);
+                newCursor++;
+            }
+        }
+        //add unmerged catalogs
+        if (previousCursor == previousCatalog.size()) {
+            for (int i = newCursor; i < newCatalog.size(); ++i) {
+                priceModels.add(newCatalog.get(i));
+            }
+        } else {
+            for (int i = previousCursor; i < previousCatalog.size(); ++i) {
+                priceModels.add(previousCatalog.get(i));
+            }
+        }
+        List<PriceModel> result = new ArrayList();
+        // combination of identical prices for which the beginning and the end coincide
+        priceModels.forEach(currentPrice -> {
+            if (!result.isEmpty()) {
+                PriceModel previousPrice = result.get(result.size() - 1);
+                if (previousPrice.getEnd().equals(currentPrice.getBegin())
+                        && previousPrice.getValue().equals(currentPrice.getValue())) {
+                    previousPrice.setEnd(currentPrice.getEnd());
+                    if (previousPrice.getId() == null && currentPrice.getId() != null) {
+                        previousPrice.setId(currentPrice.getId());
+                    }
+                    return;
+                }
+            }
+            result.add(currentPrice);
+        });
+        return result;
+    };
 
-    public static Controller getInstance(){
+    public static Controller getInstance() {
         Controller local = instance;
         if (local == null) {
             synchronized (Controller.class) {
@@ -25,184 +136,16 @@ public class Controller implements ControllerLocal {
         return local;
     }
 
-    private final Function<List<PriceModel>, Map<PriceModelPK, List<PriceModel>>> formCatalogFromList = (prices) -> {
-        return (prices == null) ? new HashMap<>() : prices.stream().collect(Collectors.groupingBy((PriceModelPK::new)));
-    };
-
-    private final BinaryOperator<List<PriceModel>> merge = (left, right) -> {
-        Collections.sort(left, Comparator.comparing(PriceModel::getBegin));
-        Collections.sort(right, Comparator.comparing(PriceModel::getBegin));
-        List<PriceModel> priceModels = new ArrayList<>();
-        Integer leftCursor = 0;
-        Integer rightCursor = 0;
-        while (rightCursor < right.size() && leftCursor < left.size()) {
-            PriceModel leftPrice = left.get(leftCursor);
-            PriceModel rightPrice = right.get(rightCursor);
-            PriceModel pastPrice = (priceModels.isEmpty())
-                    ? new PriceModel(null, null, null, null, new Date(Long.MIN_VALUE), new Date(Long.MIN_VALUE), null)
-                    : priceModels.get(priceModels.size() - 1);
-            if (leftPrice.getEnd().compareTo(rightPrice.getBegin()) < 0 ||
-                    (leftPrice.getEnd().compareTo(rightPrice.getBegin()) == 0) && !leftPrice.getValue().equals(rightPrice.getValue())) {
-                if (leftPrice.getBegin().compareTo(pastPrice.getEnd()) > 0) {
-                    priceModels.add(leftPrice);
-                } else {
-                    if (leftPrice.getEnd().compareTo(pastPrice.getEnd()) > 0) {
-                        leftPrice.setBegin(pastPrice.getEnd());
-                        priceModels.add(leftPrice);
-                    }
-                }
-                leftCursor++;
-                continue;
-            }
-
-            if (leftPrice.getEnd().compareTo(rightPrice.getBegin()) >= 0
-                    && leftPrice.getBegin().compareTo(rightPrice.getEnd()) <= 0
-                    && leftPrice.getValue().equals(rightPrice.getValue())) {
-                if (leftPrice.getBegin().compareTo(rightPrice.getBegin()) <= 0
-                        && leftPrice.getEnd().compareTo(rightPrice.getEnd()) <=0 ) {
-                    leftPrice.setEnd(rightPrice.getEnd());
-                    if (leftPrice.getBegin().compareTo(pastPrice.getEnd()) < 0) {
-                        leftPrice.setBegin(pastPrice.getEnd());
-                    }
-                    priceModels.add(leftPrice);
-                    leftCursor++;
-                    rightCursor++;
-                    continue;
-                }
-                if (leftPrice.getBegin().compareTo(rightPrice.getBegin()) <= 0
-                        && leftPrice.getEnd().compareTo(rightPrice.getEnd()) > 0 ) {
-                    PriceModel price = new PriceModel(leftPrice);
-                    price.setEnd(rightPrice.getEnd());
-                    if (price.getBegin().compareTo(pastPrice.getEnd()) < 0) {
-                        price.setBegin(pastPrice.getEnd());
-                    }
-                    priceModels.add(price);
-                    leftPrice.setBegin(rightPrice.getEnd());
-                    rightCursor++;
-                    continue;
-                }
-                if (leftPrice.getBegin().compareTo(rightPrice.getBegin()) > 0
-                        && leftPrice.getEnd().compareTo(rightPrice.getEnd()) <= 0 ) {
-                    priceModels.add(rightPrice);
-                    leftCursor++;
-                    rightCursor++;
-                    continue;
-                }
-                if (leftPrice.getBegin().compareTo(rightPrice.getBegin()) > 0
-                        && leftPrice.getEnd().compareTo(rightPrice.getEnd()) > 0 ) {
-                    priceModels.add(rightPrice);
-                    leftPrice.setBegin(rightPrice.getEnd());
-                    rightCursor++;
-                    continue;
-                }
-            }
-            if (leftPrice.getEnd().compareTo(rightPrice.getBegin()) >= 0
-                    && leftPrice.getBegin().compareTo(rightPrice.getEnd()) <= 0
-                    && !leftPrice.getValue().equals(rightPrice.getValue())) {
-                if (leftPrice.getBegin().compareTo(rightPrice.getBegin()) <= 0
-                        && leftPrice.getEnd().compareTo(rightPrice.getEnd()) <=0 ) {
-                    leftPrice.setEnd(rightPrice.getBegin());
-                    if (leftPrice.getBegin().compareTo(pastPrice.getEnd()) < 0) {
-                        leftPrice.setBegin(pastPrice.getEnd());
-                    }
-                    priceModels.add(leftPrice);
-                    priceModels.add(rightPrice);
-                    leftCursor++;
-                    rightCursor++;
-                    continue;
-                }
-                if (leftPrice.getBegin().compareTo(rightPrice.getBegin()) <= 0
-                        && leftPrice.getEnd().compareTo(rightPrice.getEnd()) > 0 ) {
-                    PriceModel price = new PriceModel(leftPrice);
-                    price.setEnd(rightPrice.getBegin());
-                    if (price.getBegin().compareTo(pastPrice.getEnd()) < 0) {
-                        price.setBegin(pastPrice.getEnd());
-                    }
-                    priceModels.add(price);
-                    priceModels.add(rightPrice);
-                    leftPrice.setBegin(rightPrice.getEnd());
-                    rightCursor++;
-                    continue;
-                }
-                if (leftPrice.getBegin().compareTo(rightPrice.getBegin()) > 0
-                        && leftPrice.getEnd().compareTo(rightPrice.getEnd()) <= 0 ) {
-                    priceModels.add(rightPrice);
-                    leftCursor++;
-                    rightCursor++;
-                    continue;
-                }
-                if (leftPrice.getBegin().compareTo(rightPrice.getBegin()) > 0
-                        && leftPrice.getEnd().compareTo(rightPrice.getEnd()) > 0 ) {
-                    priceModels.add(rightPrice);
-                    leftPrice.setBegin(rightPrice.getEnd());
-                    rightCursor++;
-                    continue;
-                }
-            }
-
-
-            if (leftPrice.getEnd().compareTo(rightPrice.getBegin()) >= 0
-                    && leftPrice.getBegin().compareTo(rightPrice.getEnd()) <= 0
-                    && !leftPrice.getValue().equals(rightPrice.getValue())) {
-                PriceModel price = new PriceModel(leftPrice);
-                price.setEnd(rightPrice.getBegin());
-                if (price.getBegin().compareTo(pastPrice.getEnd()) < 0) {
-                    price.setBegin(pastPrice.getEnd());
-                }
-                priceModels.add(price);
-                leftCursor++;
-                continue;
-            }
-
-            if (leftPrice.getBegin().equals(rightPrice.getEnd())) {
-                if (leftPrice.getValue().equals(rightPrice.getValue())) {
-                    leftPrice.setBegin(rightPrice.getBegin());
-                    priceModels.add(leftPrice);
-                    leftCursor++;
-                    rightCursor++;
-                }else {
-                    priceModels.add(rightPrice);
-                    rightCursor++;
-                }
-            }
-            if (leftPrice.getBegin().compareTo(rightPrice.getEnd()) > 0) {
-                priceModels.add(rightPrice);
-                rightCursor++;
-            }
-        }
-        if (leftCursor == left.size()) {
-            for (int i = rightCursor; i < right.size(); ++i) {
-                priceModels.add(right.get(i));
-            }
-        } else {
-            for (int i = leftCursor; i < left.size(); ++ i) {
-                priceModels.add(left.get(i));
-            }
-        }
-        List<PriceModel> result = new ArrayList();
-        priceModels.forEach(priceModel -> {
-            if (!result.isEmpty()
-                    &&result.get(result.size() - 1).getEnd().equals(priceModel.getBegin())
-                    && result.get(result.size() - 1).getValue().equals(priceModel.getValue())) {
-                result.get(result.size() - 1).setEnd(priceModel.getEnd());
-                if (result.get(result.size() - 1).getId() == null && priceModel.getId() != null) {
-                    result.get(result.size() - 1).setId(priceModel.getId());
-                }
-                return;
-            }
-            result.add(priceModel);
-        });
-        return result;
-    };
-
+    private Date getMinDate(Date left, Date right) {
+        return (left.compareTo(right) < 0) ? left : right;
+    }
 
     @Override
     public List<PriceModel> mergePrices(List<PriceModel> oldPrices, List<PriceModel> updatePrices) {
         final var availableCatalog = formCatalogFromList.apply(oldPrices);
         final var updateCatalog = formCatalogFromList.apply(updatePrices);
-        // --TODO add parallel 
         List<PriceModel> resultCatalog = updateCatalog.keySet()
-                .stream()
+                .parallelStream()
                 .map(updatingPriceByPK -> {
                     return (!availableCatalog.containsKey(updatingPriceByPK))
                             ? updateCatalog.get(updatingPriceByPK)
@@ -210,9 +153,9 @@ public class Controller implements ControllerLocal {
                 })
                 .collect(Collector.of(ArrayList::new,
                         ArrayList::addAll,
-                        (left, right) -> {
-                            left.addAll(right);
-                            return left;
+                        (previousCatalog, newCatalog) -> {
+                            previousCatalog.addAll(newCatalog);
+                            return previousCatalog;
                         }));
         availableCatalog.keySet()
                 .forEach(availablePriceModel -> {
